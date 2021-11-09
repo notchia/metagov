@@ -1,0 +1,8 @@
+name: metagov
+dependencies: 
+- python=3.9
+- jupyter
+- matplotlib
+- pandas
+- requests
+
