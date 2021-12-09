@@ -5,4 +5,5 @@ dependencies:
 - matplotlib
 - pandas
 - requests
+- solidity_parser
 
