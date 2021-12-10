@@ -11,3 +11,6 @@ __pycache__/
 # Temporary files
 tmp/
 */tmp/
+
+# Secret files
+api_key.txt
