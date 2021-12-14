@@ -3,6 +3,7 @@ dependencies:
 - python=3.9
 - airtable
 - jupyter
+- kmodes
 - matplotlib
 - pandas
 - requests
