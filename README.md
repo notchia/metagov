@@ -1,4 +1,7 @@
 # Metagov data analysis projects
+As a data scientist at the [Metagovernance Project](https://metagov.org/), I support a variety of projects about governance in Web3 - what forms it currently takes, what people think about it, and what it could look like in the future. This repository contains Jupyter notebooks for some of these projets, as well as supporting data, additional Python modules for use in these notebooks, and some results of this work.
+
+# Current projects:
 
 ## Demonstrate Airtable API use and conduct preliminary analysis
 Preliminary insights into web3 governance using data on Govbase, in [this notebook](https://github.com/notchia/metagov/blob/main/how_to_use_govbase.ipynb)
