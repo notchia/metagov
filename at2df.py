@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 from airtable import airtable
 
@@ -8,10 +9,10 @@ with open('api_key.txt', 'r') as f:
     
 
 def get_airtable():
-	return airtable.Airtable(BASE_ID, API_KEY)
+    return airtable.Airtable(BASE_ID, API_KEY)
 
 
-def get_table_as_df(at, tableName, fields=None):
+def get_table_as_df(at, tableName):
     """Get all records in a table and load into DataFrame"""
     
     # Get all records
@@ -23,9 +24,35 @@ def get_table_as_df(at, tableName, fields=None):
     df = pd.DataFrame(records)
     df.set_index('id', inplace=True)
     
-    # Keep only specified fields
-    if (fields is not None):
-    	assert isinstance(fields, list), "specify a list of fields to keep"
-    	df = df[fields]
-    
     return df
+
+
+def push_df_to_table(at, tableName, df, kwargs=None):
+    """Get records from DataFrame (directly or as csv) and push to table
+    
+    TODO: check if a version of the row exists in the table already, and
+    if so, handle based on an overwrite/update flag"""
+
+    kwargs_default = {'index_col': 0}
+    if kwargs is None:
+        kwargs = kwargs_default
+    else:
+        kwargs = kwargs_default.update(kwargs)      
+    
+    # If file is supplied, import df from file
+    if os.path.isfile(filepath):
+        assert filepath.endswith('.csv'), "supply a .csv file to which a DataFrame has been saved"
+        df = pd.read_csv(filepath, **kwargs)
+
+    assert isinstance(df, pd.DataFrame), "supply a DataFrame or .csv file to which one was saved"
+
+    # For Airtable compatibility
+    df = df.fillna('').astype(str)
+    
+    # Push each row to the Airtable
+    for i, row in df.iterrows():
+        try:
+            at.create(tableName, row.to_dict())
+        except Exception as e:
+            print(f"Could not add row {i}: {e}")
+    
