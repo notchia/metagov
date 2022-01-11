@@ -15,3 +15,4 @@ From the contract text, identify parameters and their contexts (description and 
 
 ## Analyze political, economic, and governance beliefs across crypto communities
 - Preliminary findings on the Cryptopolitical Typology Quiz: [cryptopolitics_survey_analysis.ipynb](https://github.com/notchia/metagov/blob/main/cryptopolitics_survey_analysis.ipynb)
+- Figures for article in [results](https://github.com/notchia/metagov/tree/main/results) folder; ordinal encoding used for clustering/feature selection (where possible) in [cryptopolitics_quiz_cluster_mapping.csv](https://github.com/notchia/metagov/blob/main/data/cryptopolitics_quiz_cluster_mapping.csv)
