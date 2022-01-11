@@ -14,5 +14,7 @@ From the contract text, identify parameters and their contexts (description and 
 - More thorough and generalized version in progress: [parse_contract_parameters.ipynb](https://github.com/notchia/metagov/blob/main/parse_contract_parameters.ipynb)
 
 ## Analyze political, economic, and governance beliefs across crypto communities
-- Preliminary findings on the Cryptopolitical Typology Quiz: [cryptopolitics_survey_analysis.ipynb](https://github.com/notchia/metagov/blob/main/cryptopolitics_survey_analysis.ipynb)
+The [Cryptopolitical Typology Quiz](https://metagov.typeform.com/cryptopolitics) was developed by Metagov to help the crypto community understand its political, economic, and governance beliefs. Live survey results are available in a [Typeform report](https://metagov.typeform.com/report/bz9SbjUU/ZY07qRfTs68oypzt).
+
+- Preliminary findings from data available as of January 9, 2022 on the Govbase Airtable database: [cryptopolitics_survey_analysis.ipynb](https://github.com/notchia/metagov/blob/main/cryptopolitics_survey_analysis.ipynb)
 - Figures for article in [results](https://github.com/notchia/metagov/tree/main/results) folder; ordinal encoding used for clustering/feature selection (where possible) in [cryptopolitics_quiz_cluster_mapping.csv](https://github.com/notchia/metagov/blob/main/data/cryptopolitics_quiz_cluster_mapping.csv)
