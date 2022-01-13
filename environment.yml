@@ -2,6 +2,7 @@ name: metagov
 dependencies: 
 - python=3.9
 - airtable
+- argh
 - jupyter
 - kmodes
 - matplotlib
