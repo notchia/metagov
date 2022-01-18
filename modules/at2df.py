@@ -1,4 +1,5 @@
 import os
+import argh
 import pandas as pd
 from airtable import airtable
 
@@ -40,9 +41,9 @@ def push_df_to_table(at, tableName, df, kwargs=None):
         kwargs = kwargs_default.update(kwargs)      
     
     # If file is supplied, import df from file
-    if os.path.isfile(filepath):
-        assert filepath.endswith('.csv'), "supply a .csv file to which a DataFrame has been saved"
-        df = pd.read_csv(filepath, **kwargs)
+    if os.path.isfile(df):
+        assert df.endswith('.csv'), "supply a .csv file to which a DataFrame has been saved"
+        df = pd.read_csv(df, **kwargs)
 
     assert isinstance(df, pd.DataFrame), "supply a DataFrame or .csv file to which one was saved"
 
@@ -55,4 +56,12 @@ def push_df_to_table(at, tableName, df, kwargs=None):
             at.create(tableName, row.to_dict())
         except Exception as e:
             print(f"Could not add row {i}: {e}")
-    
+
+
+def main(tablename, filepath):
+    at = get_airtable()
+    push_df_to_table(at, tablename, filepath)
+            
+            
+if __name__ == "__main__":
+    argh.dispatch_command(main)
