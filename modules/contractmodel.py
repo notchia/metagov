@@ -1,4 +1,20 @@
-# Define and populate data model based on solidity_parser AST
+import os
+import re
+import requests
+import pprint
+import validators
+import pandas as pd
+from solidity_parser import parser
+
+if not os.path.isdir('/tmp'):
+    os.mkdir('/tmp')
+
+ERRORMSG = 'error: could not parse'
+IGNORE_CONTRACTS = ['SafeMath']
+
+# =============================================================================
+# Define data model based on solidity_parser AST
+# =============================================================================
 class ContractObject():
     SUPPORTED_OBJECTS = ['ContractDefinition', 'EventDefinition', 'ModifierDefinition', 'FunctionDefinition', 'StructDefinition', 'EnumDefinition']
     
@@ -8,7 +24,7 @@ class ContractObject():
         self.contract = contractName
         self.type = ast_item['type']
         
-        assert self.type in self.SUPPORTED_OBJECTS, f"{self.type} type in {contractName} is not supported by ContractObject"
+        assert self.type in self.SUPPORTED_OBJECTS, f"Warning: {self.type} type in {contractName} is not supported by ContractObject"
         
         if self.type == 'ContractDefinition':
             self.objectName = contractName
@@ -157,7 +173,10 @@ class ContractParameter():
 
         return paramCategory
     
-    
+
+# =============================================================================
+# Populate data model based on solidity_parser AST
+# =============================================================================    
 def extract_objects_and_parameters(sourceUnit):
     """Collect information on contract objects and their parameters
     
@@ -221,7 +240,9 @@ def extract_objects_and_parameters(sourceUnit):
     return df_objects, df_parameters
 
 
+# =============================================================================
 # Populate object and parameter comments
+# =============================================================================
 def _clean_comment_lines(lines):
     """Clean list of strings that may contain a block comment or contiguous set of
     individual line comments.
@@ -342,6 +363,8 @@ def parse_object_comments(lines_raw):
         description = commentDict['notice']
     elif 'dev' in commentDict.keys():
         description = commentDict['dev']
+    elif 'return' in commentDict.keys():
+        description = commentDict['return']
     else:
         description = commentDict['full_comment'].split('.')[0]
     commentDict['description'] = description
@@ -483,26 +506,109 @@ def remove_duplicate_comments_in_parameters(df_o, df_parameters):
     return df_p
 
 
-# Main
-def parse_contract_file(uri):
+def remove_license_comments(row):
+    """Remove contract description if it's just about the software licensing"""
     
-    assert (validators.url(uri) or os.path.isfile(uri)), 'supply 
+    description = row['description']
+    if row['type'] == 'ContractDefinition' and any([(s in description) for s in ['License', 'Copyright']]):
+        description = ''
+    return description
     
-    contractFilename = url.split('/')[-1].split('.sol')[0]
-    print(f"Parsing {contractFilename}...")
+
+# =============================================================================
+# Basic coding based on keyword searching
+# =============================================================================
+CODING = {
+    'proposal': {'keywords': ['Proposal', 'Propose'],
+                 'topics': ['create', 'modify', 'execute', 'extend', 'cancel']}, 
+    'membership': {'keywords': ['Member', 'Role'],
+                   'topics': ['juror', 'jury']},
+    'voting': {'keywords': ['Vote', 'Voting', 'Ballot'],
+              'topics': ['cast', 'delegate']} ,
+    'dispute_resolution': {'keywords': ['Dispute', 'Adjudication'],
+                           'topics': ['juror', 'jury', 'evidence', 'ruling', 'appeal',
+                                      'create', 'compute', 'execute', 'reward', 'penalty']},
+    'reputation': {'keywords': ['Reputation'],
+                   'topics': ['reward', 'penalty', 'penalize']}
+}
+
+
+def find_keywords_in_str(s, camelCase=False):
+    """Return list of coding keys in string s
     
-    if uri
-    # Get content of file 
-    content = requests.get(url).text
-    with open(fpath, 'w') as f:
-        f.write(content)
-    lines = content.split('\n')
+    Keywords are capitalized"""
+    
+    if camelCase:
+        kw = [c for c in CODING.keys() if any([(k in s) for k in CODING[c]['keywords']])]
+        kw = kw + [c for c in CODING.keys() if any([(s.strip('_').lower().startswith(k.lower())) for k in CODING[c]['keywords']])]
+    else:
+        kw = [c for c in CODING.keys() if any([(k.lower() in s.lower()) for k in CODING[c]['keywords']])]
+
+    return kw
+
+
+def find_topics_in_str(s, kw, camelCase=False):
+    """Return list of topics under the keyword 'kw' in string s
+    
+    Keywords are capitalized"""
+    
+    if camelCase:
+        topics = [t for t in CODING[kw]['topics'] if (t in s)]
+        topics = topics + [t for t in CODING[kw]['topics'] if (s.strip('_').lower().startswith(t.lower()))]
+    else:
+        topics = [t for t in CODING[kw]['topics'] if (t.lower() in s.lower())]
+
+    return topics
+
+
+def find_keywords_in_obj(obj):
+    """Return list of coding keys in an object's name or description"""
+    
+    kw_name = find_keywords_in_str(obj['object_name'], camelCase=True)
+    kw_description = find_keywords_in_str(obj['description'])
+    
+    return list(set(kw_name + kw_description))
+
+
+def find_topics_in_obj(obj):
+    """Return list of topics in an object's name or description"""
+    
+    keywords = obj['coding_keyword_search']
+    topics = []
+    for kw in keywords:
+        t_name = find_topics_in_str(obj['object_name'], kw=kw, camelCase=True)
+        t_description = find_topics_in_str(obj['description'], kw=kw)
+
+        topics = topics + list(set(t_name + t_description))  
+    
+    return topics
+
+
+# =============================================================================
+# Main function
+# =============================================================================
+def parse_contract_file(uri, label='contract'):
+    
+    assert (validators.url(uri) or os.path.isfile(uri)), 'supply a valid file path or URL'
+    
+    if validators.url(uri) == True:
+        # Download content of file from URL 
+        content = requests.get(uri).text
+        fpath = 'tmp/solidity.txt'
+        with open(fpath, 'w') as f:
+            f.write(content)
+        lines = content.split('\n')
+    else:
+        # Open existing file
+        fpath = uri
+        with open(fpath, 'r') as f:
+            lines = f.readlines()
 
     # Get file structure as OrderedList and split into contracts
     sourceUnit = parser.parse_file(fpath, loc=True)
     
     # Save to file
-    savename = f"tmp/parsed_{contractFilename}.txt"
+    savename = f"tmp/parsed_{label.replace('/', '_')}.txt"
     with open(savename, 'w') as f:
         pprint.pprint(sourceUnit, stream=f)    
     
@@ -513,23 +619,14 @@ def parse_contract_file(uri):
     df_objects, df_parameters = add_docstring_comments(lines, df_objects, df_parameters)
     df_parameters = add_inline_comments(lines, df_parameters)
     df_parameters = remove_duplicate_comments_in_parameters(df_objects, df_parameters)
-    
-    # Add other identifying info
-    df_objects['url'] = url
-    
-    # Save to full dfs
-    df_objects_all = df_objects_all.append(df_objects)
-    df_parameters_all = df_parameters_all.append(df_parameters)
+    df_objects['description'] = df_objects.apply(remove_license_comments, axis=1)
 
+    # Add coding keywords/topics to the DataFrames
+    df_objects['coding_keyword_search'] = df_objects.apply(find_keywords_in_obj, axis=1)
+    df_objects['coding_topic_search'] = df_objects.apply(find_topics_in_obj, axis=1)
+
+    # Other label
+    df_objects['file_label'] = label
+    df_parameters['file_label'] = label
     
-    
-def parse_project_contracts(uri):    
-    df_objects = pd.DataFrame()
-    df_parameters = pd.DataFrame()
-    for uri in uris:
-        df_o, df_p = parse_contract_file(uri)
-        
-        df_objects = df_objects.append(df_o)
-        df_parameters = df_parameters.append(df_p)
-    
-df_objects_all['project'] = PROJECT
+    return df_objects, df_parameters
