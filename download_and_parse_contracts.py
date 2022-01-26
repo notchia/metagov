@@ -12,12 +12,12 @@ if CWD.rstrip('/').endswith('modules'):
 TMPDIR = os.path.join(CWD, 'tmp')
 
 # The following default values can be added to or overridden
-EXCLUDE_DIRS = ['lib', 'libraries', 'test', 'examples']
+EXCLUDE_DIRS = ['lib', 'libs', 'libraries', 'test', 'tests', 'test-helpers', 'testHelpers', 'example', 'examples', 'migration']
 EXCLUDE_FILES = ['SafeMath.sol', 'lib.sol', 'Migrations.sol']
 EXCLUDE_FILE_PATTERNS = [r'I?ERC\d+\.sol', r'I?EIP\d+\.sol', r'.*\.t\.sol']
 
 
-def parse_repo(projectDir, repoDict, projectLabel='', useDefaults=True, 
+def parse_repo(projectDir, repoDict, projectLabel='', useDefaults=True, clean=False,
                excludeFiles=[], includeFiles=[], excludeDirs=[], includeDirs=[]):
     """Walk through contracts and parsethe relevant files
     
@@ -37,8 +37,7 @@ def parse_repo(projectDir, repoDict, projectLabel='', useDefaults=True,
     df_objects = pd.DataFrame()
     df_parameters = pd.DataFrame()
 
-    projectFolder = projectDir.strip('/').split('/')[-1]
-
+    print(f"Walking through {projectDir}...")
     for root, dirnames, filenames in os.walk(projectDir, topdown=True):
         subdir = root.split(projectDir)[-1]
         print(f"> {subdir}")
@@ -62,7 +61,7 @@ def parse_repo(projectDir, repoDict, projectLabel='', useDefaults=True,
         for fname in filenames:
             fpath = os.path.join(root, fname)
             try:
-                df_o, df_p = parse_contract_file(fpath)
+                df_o, df_p = parse_contract_file(fpath, label=repoDict['name'])
                 fileURL = construct_file_url(f"{subdir.strip('/')}/{fname}", repoDict)
                 df_o['url'] = fileURL
                 df_p['url'] = fileURL
@@ -82,28 +81,56 @@ def parse_repo(projectDir, repoDict, projectLabel='', useDefaults=True,
         df_objects.drop(columns=['line_numbers']).to_csv(os.path.join(TMPDIR, f'contract_objects_{projectLabel}.csv'))
         df_parameters.drop(columns=['line_number']).to_csv(os.path.join(TMPDIR, f'contract_parameters_{projectLabel}.csv'))
     
-    print(f"Summary for {projectLabel}: parsed {fileCount} files")
+    print(f"\nSummary for {projectLabel}: parsed {fileCount} files")
     if len(errorFiles) > 0:
         print("Could not parse the following files:")
         for f in errorFiles:
             print(f"\t{f}")
             
+    if clean:
+        os.rmdir(projectDir)
+            
 
-def main(githubURL, label=''):
-    """Download and parse repo"""
+def load_list(s):
+    try:
+        l = ast.literal_eval(s)
+    except (ValueError, SyntaxError):
+        l = s
+    return l
+
+
+def import_contracts(csv):
+    df_contracts = pd.read_csv(csv)
+    df_contracts.fillna('', inplace=True)
+    df_contracts.drop(columns=['url', 'notes'], inplace=True)
+
+    for col in ['excludeDirs', 'includeDirs', 'excludeFiles', 'includeFiles']:
+        df_contracts[col] = df_contracts[col].apply(load_list)
     
+    return df_contracts
+
+
+def download_and_parse(githubURL, label='', kwargs={}):
     repoDir, repoDict = download_repo(githubURL)
-    #repoDir = '/home/notchia/Repositories/metagov/tmp/openlawteam_tribute-contracts'
-    #repoDict = {'owner': 'openlawteam', 'name': 'tribute-contracts', 'ref': 'v2.3.4'}
     
     assert os.path.isdir(repoDir), "could not download/unzip file as specified"
 
     if label == '':
         label = repoDict['id']
-    parse_repo(repoDir, repoDict, projectLabel=label)
+    parse_repo(repoDir, repoDict, projectLabel=label, **kwargs)
+    
+
+def main():
+    csv = os.path.join(CWD, 'data/repos.csv')
+    df_contracts = import_contracts(csv)
+    
+    for i, row in df_contracts.iterrows():
+        kwargs = {c: row[c] for c in ['excludeDirs', 'includeDirs', 'excludeFiles', 'includeFiles'] if row[c]}
+        kwargs['clean'] = True
+        if 'Colony' in row['project']:
+            download_and_parse(row['repoURL'], label=row['project'], kwargs=kwargs)
     
     
 if __name__ == '__main__':
-    main('https://github.com/openlawteam/tribute-contracts/tree/v2.3.4', "OpenLaw_Tribute")
-    #main('https://github.com/aragon/govern/tree/v1.0.0-beta.12', "Aragon_Aragon-Govern")
-    #main('https://github.com/gnosis/safe-contracts/tree/v1.3.0-libs.0', "Gnosis - GnosisSafe")
+    main()
+        

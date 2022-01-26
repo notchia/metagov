@@ -24,7 +24,7 @@ def construct_file_url(filepath, repoDict):
         branch = repoDict['ref']
     else:
         branch = repoDict['defaultBranch']
-    fileURL = baseURL + '/blob/{branch}/' + filepath
+    fileURL = baseURL + f'/blob/{branch}/' + filepath
     
     return fileURL
         

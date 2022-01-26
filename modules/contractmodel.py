@@ -24,7 +24,7 @@ class ContractObject():
         self.contract = contractName
         self.type = ast_item['type']
         
-        assert self.type in self.SUPPORTED_OBJECTS, f"Warning: {self.type} type in {contractName} is not supported by ContractObject"
+        assert self.type in self.SUPPORTED_OBJECTS, ""#f"Warning: {self.type} type in {contractName} is not supported by ContractObject"
         
         if self.type == 'ContractDefinition':
             self.objectName = contractName
@@ -613,8 +613,10 @@ def find_topics_in_obj(obj, df_params):
 # =============================================================================
 # Main function
 # =============================================================================
-def parse_contract_file(uri):
+def parse_contract_file(uri, label=''):
     """Parse a Solidity contract file from a filepath or a URL
+    
+    If present, prepend 'label' to parsed AST filename for easier batch parsing
     
     returns df_objects, df_parameters"""
     
@@ -639,8 +641,9 @@ def parse_contract_file(uri):
     sourceUnit = parser.parse_file(fpath, loc=True)
     
     # Save to file
-    savename = f"tmp/parsed_{saveName}.txt"
-    with open(savename, 'w') as f:
+    if label:
+        saveName = label + '_' + saveName
+    with open(f"tmp/parsed_{saveName}.txt", 'w') as f:
         pprint.pprint(sourceUnit, stream=f)    
     
     # Get object and parameter DataFrames (selecting from solidity_parser AST)
