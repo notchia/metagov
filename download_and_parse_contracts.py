@@ -1,6 +1,7 @@
 import os
 import re
 import ast
+import shutil
 import pandas as pd
 
 from modules.githubscrape import download_repo, construct_file_url
@@ -18,10 +19,26 @@ EXCLUDE_FILE_PATTERNS = [r'I?ERC\d+\.sol', r'I?EIP\d+\.sol', r'.*\.t\.sol']
 
 
 def parse_repo(projectDir, repoDict, projectLabel='', useDefaults=True, clean=False,
-               excludeFiles=[], includeFiles=[], excludeDirs=[], includeDirs=[]):
+               excludeFiles=None, includeFiles=None, excludeDirs=None, includeDirs=None):
     """Walk through contracts and parsethe relevant files
     
     Explicitly only attempts to parse .sol files"""
+    
+    objectsFile = os.path.join(TMPDIR, f'contract_objects_{projectLabel}.csv')
+    parametersFile = os.path.join(TMPDIR, f'contract_parameters_{projectLabel}.csv')
+    
+    if os.path.isfile(objectsFile) and os.path.isfile(parametersFile):
+        print(f"Keeping previously parsed results for {projectDir}")
+        return
+    
+    if excludeFiles is None:
+        excludeFiles = []
+    if includeFiles is None:
+        includeFiles = []
+    if excludeDirs is None:
+        excludeDirs = []
+    if includeDirs is None:
+        includeDirs = []
     
     assert os.path.isdir(projectDir), "specify an existing directory"
     assert not (len(excludeFiles) > 0 and len(includeFiles) > 0), "specify only files to exclude or to include, not both"
@@ -75,11 +92,12 @@ def parse_repo(projectDir, repoDict, projectLabel='', useDefaults=True, clean=Fa
     # Save parsed data to files
     if (len(df_objects.index) > 0):
         df_objects['project'] = projectLabel
-        df_objects['repo_last_updated'] = repoDict['updated_at']
+        df_objects['repo_update_datetime'] = repoDict['updated_at']
         df_objects['repo_version'] = repoDict['ref']
         df_objects['repo_url'] = repoDict['url']
-        df_objects.drop(columns=['line_numbers']).to_csv(os.path.join(TMPDIR, f'contract_objects_{projectLabel}.csv'))
-        df_parameters.drop(columns=['line_number']).to_csv(os.path.join(TMPDIR, f'contract_parameters_{projectLabel}.csv'))
+        # TODO: reset index
+        df_objects.drop(columns=['line_numbers']).to_csv(objectsFile)
+        df_parameters.drop(columns=['line_number']).to_csv(parametersFile)
     
     print(f"\nSummary for {projectLabel}: parsed {fileCount} files")
     if len(errorFiles) > 0:
@@ -88,7 +106,7 @@ def parse_repo(projectDir, repoDict, projectLabel='', useDefaults=True, clean=Fa
             print(f"\t{f}")
             
     if clean:
-        os.rmdir(projectDir)
+        shutil.rmtree(projectDir)
             
 
 def load_list(s):
@@ -110,8 +128,9 @@ def import_contracts(csv):
     return df_contracts
 
 
-def download_and_parse(githubURL, label='', kwargs={}):
-    repoDir, repoDict = download_repo(githubURL)
+def download_and_parse(githubURL, subdir, label='', kwargs={}):
+    
+    repoDir, repoDict = download_repo(githubURL, subdir=subdir)
     
     assert os.path.isdir(repoDir), "could not download/unzip file as specified"
 
@@ -125,11 +144,17 @@ def main():
     df_contracts = import_contracts(csv)
     
     for i, row in df_contracts.iterrows():
+        print(f"\n============ {row['project']} ============\n")
         kwargs = {c: row[c] for c in ['excludeDirs', 'includeDirs', 'excludeFiles', 'includeFiles'] if row[c]}
-        kwargs['clean'] = True
-        if 'Colony' in row['project']:
-            download_and_parse(row['repoURL'], label=row['project'], kwargs=kwargs)
-    
+        if 'includeFiles' in kwargs.keys():
+            kwargs['useDefaults'] = False
+        kwargs['clean'] = False
+        
+        try:
+            download_and_parse(row['repoURL'], row['subdir'], label=row['project'], kwargs=kwargs)
+        except AssertionError as e:
+            print(e)
+
     
 if __name__ == '__main__':
     main()
