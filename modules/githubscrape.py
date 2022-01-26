@@ -1,6 +1,7 @@
 import os
 import requests
-from datetime import date
+import pandas as pd
+from json.decoder import JSONDecodeError
 from zipfile import ZipFile
 from io import BytesIO
 
@@ -8,8 +9,20 @@ CWD = os.path.join(os.path.dirname(__file__))
 if CWD.rstrip('/').endswith('modules'):
     CWD = CWD.rstrip('/').rsplit('/', 1)[0]
 TMPDIR = os.path.join(CWD, 'tmp')
+DATADIR = os.path.join(CWD, 'data')
+
+REPODICT_FILE = os.path.join(DATADIR, 'repodicts.csv')
+if not os.path.isfile(REPODICT_FILE):
+    open(REPODICT_FILE, 'a').close()
 
 HEADERS = {'User-Agent': 'metagov'}
+
+
+def assert_api_rate_limit_not_exceeded(r):
+    try:
+        assert 'API rate limit exceeded' not in r.json()['message'], 'API rate limit exceeded'
+    except (TypeError, KeyError, JSONDecodeError):
+        pass    
 
 
 def construct_file_url(filepath, repoDict):
@@ -23,8 +36,8 @@ def construct_file_url(filepath, repoDict):
         baseURL = baseURL.split('/tree')[0]
         branch = repoDict['ref']
     else:
-        branch = repoDict['defaultBranch']
-    fileURL = baseURL + '/blob/{branch}/' + filepath
+        branch = repoDict['default_branch']
+    fileURL = baseURL + f'/blob/{branch}/' + filepath
     
     return fileURL
         
@@ -32,7 +45,7 @@ def construct_file_url(filepath, repoDict):
 def get_github_api_info(githubURL):
     """Get relevant info from the URL string itself and from an API request
     
-    Returns rpoDict: dictionary containing repository owner, name, ref, ..."""
+    Returns repoDict: dictionary containing repository owner, name, ref, ..."""
     
     # Separate original URL into components
     components = githubURL.split('/')
@@ -42,22 +55,25 @@ def get_github_api_info(githubURL):
     if domainIndex+2 != len(components) - 1:
         ref = components[-1]
     else:
-        ref = None
+        ref = ''
     
     # For reference, get the date that the repository was most recently updated
     apiURL = f"https://api.github.com/repos/{repoOwner}/{repoName}"
-    r_base = requests.get(apiURL).json()
-    defaultBranch = r_base.get('default_branch', '')
+    r = requests.get(apiURL)
+    assert_api_rate_limit_not_exceeded(r)
+    r_base = r.json()
+    defaultBranch = r_base.get('default_branch', 'master') # May be main tho!
     dateUpdated = ''
     if ref:
         # If version/tag specified
         apiURL = apiURL + '/commits/' + ref
-        r_ref = requests.get(apiURL).json()
+        r = requests.get(apiURL)
+        assert_api_rate_limit_not_exceeded(r)
+        r_ref = r.json()
         dateUpdated = r_ref.get('commit', {}).get('committer', {}).get('date', '')
     else:
         # If main/master
-        dateUpdated = r_base.get('updated_at')
-        defaultBranch = r_base.get('default_branch')    
+        dateUpdated = r_base.get('updated_at')   
 
     # Define metadata
     repoDict = {'owner': repoOwner,
@@ -106,40 +122,65 @@ def download_repo(githubURL, subdir='contracts', ext='.sol'):
     if ext is None:
         ext = ''    
     
-    repoDir = None
-    repoDict = {}
+    repoDir = ''
+    
+    # Read repo API info if previously collected
+    # (To prevent unnecessary API calls)
+    try:
+        repoDicts = pd.read_csv(REPODICT_FILE, index_col=False)
+        repoDicts.fillna('', inplace=True)
+        entries = repoDicts.loc[repoDicts['url'] == githubURL]
+        if len(entries.index) > 0:
+            repoDict = entries.iloc[0].to_dict()
+        else:
+            repoDict = {}
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        repoDict = {}
     
     try:
-        # Get zip file
-        repoDict = get_github_api_info(githubURL)
-        zipURL = get_zipball_api_url(repoDict)
-        
-        r = requests.get(zipURL)
-        zipFile = ZipFile(BytesIO(r.content))
-        
-        # Extract just the relevant subdirectory(-ies) from the zip file
-        zipItems = zipFile.infolist()
-        baseItem = zipItems[0].filename
-        itemCount = 0
-        if subdir:
-            baseItem = baseItem + subdir.strip('/') + '/'
-        for zi in zipItems:
-            item = zi.filename
-            if (f"/{subdir.strip('/')}/" in item) and item.endswith(ext):
-                zipFile.extract(item, TMPDIR)
-                itemCount += 1
-        
-        # Rename directory to {owner}_{name}
-        oldName = baseItem.split('/')[0]
-        newName = repoDict['id']
-        repoDir_old = os.path.join(TMPDIR, oldName)
-        repoDir = os.path.join(TMPDIR, newName)
-        os.rename(repoDir_old, repoDir)
-        
-        print(f"Extracted {itemCount} items from {githubURL} to {repoDir}")
+        # Get and save API info if not yet collected
+        if repoDict == {}:
+            repoDict = get_github_api_info(githubURL)
+            with open(REPODICT_FILE, 'a') as f:
+                if os.stat(REPODICT_FILE).st_size == 0:
+                    f.write(','.join(repoDict.keys()))
+                f.write('\n' + ','.join(repoDict.values()))
+    
+        # If target directory does not yet exist, download and extract
+        # (To prevent unnecessary API calls; Does not overwrite existing files!)        
+        targetName = repoDict['id']
+        repoDir = os.path.join(TMPDIR, targetName)
+        if not(os.path.isdir(repoDir)):
+            # Get zip file
+            zipURL = get_zipball_api_url(repoDict)
+            r = requests.get(zipURL)
+            assert_api_rate_limit_not_exceeded(r)
+            zipFile = ZipFile(BytesIO(r.content))
+            
+            # Extract just the relevant subdirectory(-ies) from the zip file
+            zipItems = zipFile.infolist()
+            baseItem = zipItems[0].filename
+            itemCount = 0
+            if subdir:
+                baseItem = baseItem + subdir.strip('/') + '/'
+            for zi in zipItems:
+                item = zi.filename
+                if (f"/{subdir.strip('/')}/" in item) and item.endswith(ext):
+                    zipFile.extract(item, TMPDIR)
+                    itemCount += 1
+            
+            # Rename directory to {owner}_{name}
+            oldName = baseItem.split('/')[0]
+            repoDir_old = os.path.join(TMPDIR, oldName)
+            os.rename(repoDir_old, repoDir)
+            
+            print(f"Extracted {itemCount} items from {githubURL} to {repoDir}")
+        else:
+            print(f"Using files already in {repoDir}")
 
     except Exception as e: 
         print(e)
+        repoDir = ''
 
     return repoDir, repoDict
 

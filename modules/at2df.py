@@ -1,7 +1,14 @@
 import os
+import re
 import argh
 import pandas as pd
 from airtable import airtable
+
+CWD = os.path.join(os.path.dirname(__file__))
+if CWD.rstrip('/').endswith('modules'):
+    CWD = CWD.rstrip('/').rsplit('/', 1)[0]
+TMPDIR = os.path.join(CWD, 'tmp')
+
 
 # Set Airtable access parameters for Govbase
 BASE_ID = 'appx3e9Przn9iprkU'
@@ -57,10 +64,28 @@ def push_df_to_table(at, tableName, df, kwargs=None):
         except Exception as e:
             print(f"Could not add row {i}: {e}")
 
+def push_dfs_to_table(at, tableName, dirpath, kwargs=None):
+    
+    fullpath = os.path.join(CWD, dirpath)
+    
+    assert os.path.isdir(fullpath), "supply a directory path relative to project root"
+    
+    files = os.listdir(fullpath)
+    files.sort()
+        
+    for f in files:
+        print(f"Uploading data from {f}...")
+        push_df_to_table(at, tableName, os.path.join(dirpath, f), kwargs=kwargs)
 
-def main(tablename, filepath):
+
+def main(tablename, path):
     at = get_airtable()
-    push_df_to_table(at, tablename, filepath)
+    if os.path.isdir(path):
+        push_dfs_to_table(at, tablename, path)
+    elif os.path.isfile(path):
+        push_df_to_table(at, tablename, path)
+    else:
+        print("provide a valid file or directory")
             
             
 if __name__ == "__main__":
