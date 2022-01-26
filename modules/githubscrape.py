@@ -9,15 +9,30 @@ if CWD.rstrip('/').endswith('modules'):
     CWD = CWD.rstrip('/').rsplit('/', 1)[0]
 TMPDIR = os.path.join(CWD, 'tmp')
 
+HEADERS = {'User-Agent': 'metagov'}
 
-def get_zipball_api_url(githubURL):
-    """Given repository URL, construct url for zipball
-    githubURL may be for a specific version, not necessarily main
+
+def construct_file_url(filepath, repoDict):
+    """Given a repository filepath extracted from the below methods, 
+    return a (hopefully valid...) URL for the file
+
+    Note: filepath must be from root = repository root, not full local filepath!"""
+
+    baseURL = repoDict['url']
+    if repoDict['ref']:
+        baseURL = baseURL.split('/tree')[0]
+        branch = repoDict['ref']
+    else:
+        branch = repoDict['defaultBranch']
+    fileURL = baseURL + '/blob/{branch}/' + filepath
     
-    Returns:
-    - zipURL: zipball URL, for specific version of repo if specified
-    - repoDict: dictionary containing repository owner, name, and ref
-    """
+    return fileURL
+        
+
+def get_github_api_info(githubURL):
+    """Get relevant info from the URL string itself and from an API request
+    
+    Returns rpoDict: dictionary containing repository owner, name, ref, ..."""
     
     # Separate original URL into components
     components = githubURL.split('/')
@@ -29,17 +44,46 @@ def get_zipball_api_url(githubURL):
     else:
         ref = None
     
-    # Construct zip URL
-    zipURL = f"https://api.github.com/repos/{repoOwner}/{repoName}/zipball"
+    # For reference, get the date that the repository was most recently updated
+    apiURL = f"https://api.github.com/repos/{repoOwner}/{repoName}"
+    r_base = requests.get(apiURL).json()
+    defaultBranch = r_base.get('default_branch', '')
+    dateUpdated = ''
     if ref:
-        zipURL = zipURL + '/' + ref
-    
+        # If version/tag specified
+        apiURL = apiURL + '/commits/' + ref
+        r_ref = requests.get(apiURL).json()
+        dateUpdated = r_ref.get('commit', {}).get('committer', {}).get('date', '')
+    else:
+        # If main/master
+        dateUpdated = r_base.get('updated_at')
+        defaultBranch = r_base.get('default_branch')    
+
+    # Define metadata
     repoDict = {'owner': repoOwner,
                 'name': repoName,
+                'default_branch': defaultBranch,
                 'ref': ref,
-                'date_accessed': date.today().strftime("%Y-%m-%d")}
+                'updated_at': dateUpdated,
+                'url': githubURL,
+                'id': f"{repoOwner}_{repoName}" + (f"_{ref}" if ref else f"_{defaultBranch}")
+                }
     
-    return zipURL, repoDict
+    return repoDict
+
+
+def get_zipball_api_url(repoDict):
+    """Given repository information, construct url for zipball
+    
+    Returns zipball URL, for specific version of repo if specified
+    """
+    
+    # Construct zip URL
+    zipURL = f"https://api.github.com/repos/{repoDict['owner']}/{repoDict['name']}/zipball"
+    if repoDict['ref']:
+        zipURL = zipURL + '/' + repoDict['ref']
+    
+    return zipURL
     
 
 def download_repo(githubURL, subdir='contracts', ext='.sol'):
@@ -47,14 +91,18 @@ def download_repo(githubURL, subdir='contracts', ext='.sol'):
     
     Arguments:
     - githubURL: valid GitHub URL to repository root (main or a specific version)
-    - subdir: specific subdirectory to extract content from. Can also be '' or None
+    - subdir: specific subdirectory (-ies) to extract content from. Can also be ''
     - ext: specific file extension to keep items from. Can also be '' 
     
-    NOTE: for ease of use with current repo structures of interest, subdir now
+    Returns:
+    - repoDir: path to local directory
+    - repoDict: see get_github_api_info
+    
+    NOTE: for ease of use with current repo structures of interest, subdir 
     matches ANY subdirectory that includes this folder name
     """
 
-    assert 'github.com' in githubURL, "Download from github.com only"
+    assert 'github.com' in githubURL, "Download a repository from github.com only"
     if ext is None:
         ext = ''    
     
@@ -63,42 +111,43 @@ def download_repo(githubURL, subdir='contracts', ext='.sol'):
     
     try:
         # Get zip file
-        zipURL, repoDict = get_zipball_api_url(githubURL)
-        print(zipURL)
+        repoDict = get_github_api_info(githubURL)
+        zipURL = get_zipball_api_url(repoDict)
+        
         r = requests.get(zipURL)
         zipFile = ZipFile(BytesIO(r.content))
         
-        # Extract just the relevant subdir from the zip file
+        # Extract just the relevant subdirectory(-ies) from the zip file
         zipItems = zipFile.infolist()
         baseItem = zipItems[0].filename
+        itemCount = 0
         if subdir:
             baseItem = baseItem + subdir.strip('/') + '/'
         for zi in zipItems:
             item = zi.filename
             if (f"/{subdir.strip('/')}/" in item) and item.endswith(ext):
-                print(f"extracting {item}...")
                 zipFile.extract(item, TMPDIR)
-            
+                itemCount += 1
         
         # Rename directory to {owner}_{name}
         oldName = baseItem.split('/')[0]
-        newName = repoDict['owner'] + '_' + repoDict['name']
+        newName = repoDict['id']
         repoDir_old = os.path.join(TMPDIR, oldName)
         repoDir = os.path.join(TMPDIR, newName)
         os.rename(repoDir_old, repoDir)
+        
+        print(f"Extracted {itemCount} items from {githubURL} to {repoDir}")
 
     except Exception as e: 
         print(e)
-        
-    print(repoDir)
 
     return repoDir, repoDict
 
     
 if __name__ == "__main__":
+    # Test with content in this repository
     testURL = 'https://github.com/notchia/metagov'
     subdir = 'data/contracts'
-    clean = False
-    
     repoDir, repoDict = download_repo(testURL, subdir=subdir)
     assert os.path.isdir(repoDir), "could not download/unzip file as specified"
+    print(f"Successfully downloaded content from {testURL}")
