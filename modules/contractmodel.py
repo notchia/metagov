@@ -340,15 +340,15 @@ def parse_object_comments(lines_raw):
     commentDict['full_comment'] = '\n'.join(lines)  
     
     # Add tag values, if NatSpec is used
-    splitLines = re.split(r'@([a-z]+)', ' '.join(lines))[1:] 
+    splitLines = re.split(r'\n@([a-z]+)', '\n' + '\n'.join(lines))[1:] 
     if len(splitLines) > 0:
         values = zip(splitLines[::2], splitLines[1::2])
         for (tag, value) in values:
             prevValue = commentDict.get(tag, '')
             if not prevValue:
-                commentDict[tag] = value.strip()
+                commentDict[tag] = value.replace('\n', ' ').strip()
             else:
-                commentDict[tag] = prevValue + '\n' + value.strip()
+                commentDict[tag] = prevValue + '\n' + value.replace('\n', ' ').strip()
     
     # Split parameters (if any) into a dictionary
     params = commentDict.get('param', '')
@@ -522,14 +522,16 @@ CODING = {
     'proposal': {'keywords': ['Proposal', 'Propose'],
                  'topics': ['create', 'modify', 'execute', 'extend', 'cancel']}, 
     'membership': {'keywords': ['Member', 'Role'],
-                   'topics': ['juror', 'jury']},
+                   'topics': ['permission', 'responsibility', 'right', 'allow', 'require', 'forbid', 'authorize']},
     'voting': {'keywords': ['Vote', 'Voting', 'Ballot'],
-              'topics': ['cast', 'delegate']} ,
-    'dispute_resolution': {'keywords': ['Dispute', 'Adjudication'],
+              'topics': ['cast', 'delegate', 'change', 'tally', 'compute', 'referendum']} ,
+    'dispute_resolution': {'keywords': ['Dispute', 'Adjudication', 'Arbitrator'],
                            'topics': ['juror', 'jury', 'evidence', 'ruling', 'appeal',
-                                      'create', 'compute', 'execute', 'reward', 'penalty']},
+                                      'create', 'compute', 'execute', 'reward', 'penalty', 'sortition']},
     'reputation': {'keywords': ['Reputation'],
-                   'topics': ['reward', 'penalty', 'penalize']}
+                   'topics': ['reward', 'penalty', 'penalize']},
+    'election': {'keywords': ['Elect', 'Candidate'],
+                 'topics': ['']}
 }
 
 
@@ -538,11 +540,14 @@ def find_keywords_in_str(s, camelCase=False):
     
     Keywords are capitalized"""
     
-    if camelCase:
-        kw = [c for c in CODING.keys() if any([(k in s) for k in CODING[c]['keywords']])]
-        kw = kw + [c for c in CODING.keys() if any([(s.strip('_').lower().startswith(k.lower())) for k in CODING[c]['keywords']])]
+    if s:
+        if camelCase:
+            kw = [c for c in CODING.keys() if any([(k in s) for k in CODING[c]['keywords']])]
+            kw = kw + [c for c in CODING.keys() if any([(s.strip('_').lower().startswith(k.lower())) for k in CODING[c]['keywords']])]
+        else:
+            kw = [c for c in CODING.keys() if any([(k.lower() in s.lower()) for k in CODING[c]['keywords']])]
     else:
-        kw = [c for c in CODING.keys() if any([(k.lower() in s.lower()) for k in CODING[c]['keywords']])]
+        kw = []
 
     return kw
 
@@ -552,25 +557,37 @@ def find_topics_in_str(s, kw, camelCase=False):
     
     Keywords are capitalized"""
     
-    if camelCase:
-        topics = [t for t in CODING[kw]['topics'] if (t in s)]
-        topics = topics + [t for t in CODING[kw]['topics'] if (s.strip('_').lower().startswith(t.lower()))]
+    if s:
+        if camelCase:
+            topics = [t for t in CODING[kw]['topics'] if (t in s)]
+            topics = topics + [t for t in CODING[kw]['topics'] if (s.strip('_').lower().startswith(t.lower()))]
+        else:
+            topics = [t for t in CODING[kw]['topics'] if (t.lower() in s.lower())]
     else:
-        topics = [t for t in CODING[kw]['topics'] if (t.lower() in s.lower())]
+        topics = []
 
     return topics
 
 
-def find_keywords_in_obj(obj):
+def find_keywords_in_obj(obj, df_params):
     """Return list of coding keys in an object's name or description"""
     
     kw_name = find_keywords_in_str(obj['object_name'], camelCase=True)
     kw_description = find_keywords_in_str(obj['description'])
+
+    kw_params = []    
+    try:
+        params = df_params.loc[df_params['object_name'] == obj['object_name']]
+        for i, param in params.iterrows():
+            kw_params = kw_params + find_keywords_in_str(param['parameter_name'], camelCase=True)
+            kw_params = kw_params + find_keywords_in_str(param['description'])
+    except KeyError:
+        pass
     
-    return list(set(kw_name + kw_description))
+    return list(set(kw_name + kw_description + kw_params))
 
 
-def find_topics_in_obj(obj):
+def find_topics_in_obj(obj, df_params):
     """Return list of topics in an object's name or description"""
     
     keywords = obj['coding_keyword_search']
@@ -579,7 +596,16 @@ def find_topics_in_obj(obj):
         t_name = find_topics_in_str(obj['object_name'], kw=kw, camelCase=True)
         t_description = find_topics_in_str(obj['description'], kw=kw)
 
-        topics = topics + list(set(t_name + t_description))  
+        t_params = []
+        try:
+            params = df_params.loc[df_params['object_name'] == obj['object_name']]
+            for i, param in params.iterrows():
+                t_params = t_params + find_topics_in_str(param['parameter_name'], kw=kw, camelCase=True)
+                t_params = t_params + find_topics_in_str(param['description'], kw=kw)
+        except KeyError:
+            pass
+
+        topics = topics + list(set(t_name + t_description + t_params))  
     
     return topics
 
@@ -587,9 +613,12 @@ def find_topics_in_obj(obj):
 # =============================================================================
 # Main function
 # =============================================================================
-def parse_contract_file(uri, label='contract'):
+def parse_contract_file(uri):
+    """Parse a Solidity contract file from a filepath or a URL
     
-    assert (validators.url(uri) or os.path.isfile(uri)), 'supply a valid file path or URL'
+    returns df_objects, df_parameters"""
+    
+    assert (validators.url(uri) == True or os.path.isfile(uri)), 'supply a valid file path or URL'
     
     if validators.url(uri) == True:
         # Download content of file from URL 
@@ -598,17 +627,19 @@ def parse_contract_file(uri, label='contract'):
         with open(fpath, 'w') as f:
             f.write(content)
         lines = content.split('\n')
+        saveName = uri.split('/')[-1].split('.')[0]
     else:
         # Open existing file
         fpath = uri
         with open(fpath, 'r') as f:
             lines = f.readlines()
+        saveName = os.path.splitext(os.path.split(uri)[-1])[0]
 
     # Get file structure as OrderedList and split into contracts
     sourceUnit = parser.parse_file(fpath, loc=True)
     
     # Save to file
-    savename = f"tmp/parsed_{label.replace('/', '_')}.txt"
+    savename = f"tmp/parsed_{saveName}.txt"
     with open(savename, 'w') as f:
         pprint.pprint(sourceUnit, stream=f)    
     
@@ -622,11 +653,7 @@ def parse_contract_file(uri, label='contract'):
     df_objects['description'] = df_objects.apply(remove_license_comments, axis=1)
 
     # Add coding keywords/topics to the DataFrames
-    df_objects['coding_keyword_search'] = df_objects.apply(find_keywords_in_obj, axis=1)
-    df_objects['coding_topic_search'] = df_objects.apply(find_topics_in_obj, axis=1)
-
-    # Other label
-    df_objects['file_label'] = label
-    df_parameters['file_label'] = label
+    df_objects['coding_keyword_search'] = df_objects.apply(lambda row: find_keywords_in_obj(row, df_parameters), axis=1)
+    df_objects['coding_topic_search'] = df_objects.apply(lambda row: find_topics_in_obj(row, df_parameters), axis=1)  
     
     return df_objects, df_parameters

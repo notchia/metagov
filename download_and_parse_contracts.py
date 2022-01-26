@@ -3,7 +3,7 @@ import re
 import ast
 import pandas as pd
 
-from modules.githubscrape import download_repo
+from modules.githubscrape import download_repo, construct_file_url
 from modules.contractmodel import parse_contract_file
 
 CWD = os.path.join(os.path.dirname(__file__))
@@ -11,14 +11,17 @@ if CWD.rstrip('/').endswith('modules'):
     CWD = CWD.rstrip('/').rsplit('/', 1)[0]
 TMPDIR = os.path.join(CWD, 'tmp')
 
-EXCLUDE_DIRS = ['lib', 'test']
-EXCLUDE_FILES = ['SafeMath.sol', 'lib.sol']
-EXCLUDE_FILE_PATTERNS = [r'I?ERC\d+.sol', r'I?EIP\d+.sol']
+# The following default values can be added to or overridden
+EXCLUDE_DIRS = ['lib', 'libraries', 'test', 'examples']
+EXCLUDE_FILES = ['SafeMath.sol', 'lib.sol', 'Migrations.sol']
+EXCLUDE_FILE_PATTERNS = [r'I?ERC\d+\.sol', r'I?EIP\d+\.sol', r'.*\.t\.sol']
 
 
-def parse_repo(projectDir, projectLabel='', useDefaults=True, 
+def parse_repo(projectDir, repoDict, projectLabel='', useDefaults=True, 
                excludeFiles=[], includeFiles=[], excludeDirs=[], includeDirs=[]):
-    """Walk through contracts and apply some function to the relevant files"""
+    """Walk through contracts and parsethe relevant files
+    
+    Explicitly only attempts to parse .sol files"""
     
     assert os.path.isdir(projectDir), "specify an existing directory"
     assert not (len(excludeFiles) > 0 and len(includeFiles) > 0), "specify only files to exclude or to include, not both"
@@ -58,9 +61,11 @@ def parse_repo(projectDir, projectLabel='', useDefaults=True,
         # Parse each file and append objects and parameters to main dfs
         for fname in filenames:
             fpath = os.path.join(root, fname)
-            fileLabel = f"{projectFolder}/{subdir.strip('/')}/{fname.split('.')[0]}"
             try:
-                df_o, df_p = parse_contract_file(fpath, label=fileLabel)
+                df_o, df_p = parse_contract_file(fpath)
+                fileURL = construct_file_url(f"{subdir.strip('/')}/{fname}", repoDict)
+                df_o['url'] = fileURL
+                df_p['url'] = fileURL
                 df_objects = df_objects.append(df_o)
                 df_parameters = df_parameters.append(df_p)
                 fileCount += 1
@@ -69,16 +74,20 @@ def parse_repo(projectDir, projectLabel='', useDefaults=True,
                 errorFiles.append(os.path.join(subdir, fname))
         
     # Save parsed data to files
-    df_objects['project'] = projectLabel
     if (len(df_objects.index) > 0):
+        df_objects['project'] = projectLabel
+        df_objects['repo_last_updated'] = repoDict['updated_at']
+        df_objects['repo_version'] = repoDict['ref']
+        df_objects['repo_url'] = repoDict['url']
         df_objects.drop(columns=['line_numbers']).to_csv(os.path.join(TMPDIR, f'contract_objects_{projectLabel}.csv'))
         df_parameters.drop(columns=['line_number']).to_csv(os.path.join(TMPDIR, f'contract_parameters_{projectLabel}.csv'))
     
-    print(f"Summary: parsed {fileCount} files")
-    print("Could not parse the following files:")
-    for f in errorFiles:
-        print(f"\t{f}")
-    
+    print(f"Summary for {projectLabel}: parsed {fileCount} files")
+    if len(errorFiles) > 0:
+        print("Could not parse the following files:")
+        for f in errorFiles:
+            print(f"\t{f}")
+            
 
 def main(githubURL, label=''):
     """Download and parse repo"""
@@ -90,10 +99,11 @@ def main(githubURL, label=''):
     assert os.path.isdir(repoDir), "could not download/unzip file as specified"
 
     if label == '':
-        label = f"{repoDict['owner']}_{repoDict['name']}"
-    parse_repo(repoDir, projectLabel=label)
+        label = repoDict['id']
+    parse_repo(repoDir, repoDict, projectLabel=label)
     
     
 if __name__ == '__main__':
-    #main('https://github.com/openlawteam/tribute-contracts/tree/v2.3.4', "OpenLaw_Tribute")
-    main('https://github.com/aragon/govern/tree/v1.0.0-beta.12', "Aragon_Aragon-Govern")
+    main('https://github.com/openlawteam/tribute-contracts/tree/v2.3.4', "OpenLaw_Tribute")
+    #main('https://github.com/aragon/govern/tree/v1.0.0-beta.12', "Aragon_Aragon-Govern")
+    #main('https://github.com/gnosis/safe-contracts/tree/v1.3.0-libs.0', "Gnosis - GnosisSafe")
