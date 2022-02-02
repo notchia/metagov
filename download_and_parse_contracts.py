@@ -37,8 +37,12 @@ def parse_repo(projectDir, repoDict, projectLabel='', useDefaults=True, clean=Fa
         includeFiles = []
     if excludeDirs is None:
         excludeDirs = []
+    else:
+        assert type(excludeDirs) == list, "provide excludeDirs as a list of strings"
     if includeDirs is None:
         includeDirs = []
+    else:
+        assert type(includeDirs) == list, "provide excludeDirs as a list of strings"
     
     assert os.path.isdir(projectDir), "specify an existing directory"
     assert not (len(excludeFiles) > 0 and len(includeFiles) > 0), "specify only files to exclude or to include, not both"

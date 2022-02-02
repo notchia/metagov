@@ -1,4 +1,5 @@
 import os
+import shutil
 import requests
 import pandas as pd
 from json.decoder import JSONDecodeError
@@ -146,11 +147,22 @@ def download_repo(githubURL, subdir='contracts', ext='.sol'):
                     f.write(','.join(repoDict.keys()))
                 f.write('\n' + ','.join(repoDict.values()))
     
-        # If target directory does not yet exist, download and extract
+        # If target directory does not yet exist, or if subdir is not in it, download and extract
         # (To prevent unnecessary API calls; Does not overwrite existing files!)        
         targetName = repoDict['id']
         repoDir = os.path.join(TMPDIR, targetName)
+        downloadFlag = False
         if not(os.path.isdir(repoDir)):
+            downloadFlag = True
+        else:
+            foundSubdir = False
+            for r, d, f in os.walk(repoDir):
+                if (r == subdir) or (subdir in d):
+                    foundSubdir = True
+            if foundSubdir == False:
+                downloadFlag = True
+        
+        if downloadFlag:
             # Get zip file
             zipURL = get_zipball_api_url(repoDict)
             r = requests.get(zipURL)
@@ -172,6 +184,9 @@ def download_repo(githubURL, subdir='contracts', ext='.sol'):
             # Rename directory to {owner}_{name}
             oldName = baseItem.split('/')[0]
             repoDir_old = os.path.join(TMPDIR, oldName)
+            if os.path.isdir(repoDir):
+                print(f"Overwriting existing repository {repoDir}...")
+                shutil.rmtree(repoDir)
             os.rename(repoDir_old, repoDir)
             
             print(f"Extracted {itemCount} items from {githubURL} to {repoDir}")
