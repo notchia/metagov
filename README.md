@@ -1,6 +1,14 @@
 # Metagov data analysis projects
 As a data scientist at the [Metagovernance Project](https://metagov.org/), I support a variety of projects about **governance in Web3**, investigating what forms it currently takes, what people think about it, and what it could look like in the future. This repository contains Jupyter notebooks for some of these projets, as well as supporting data, additional Python modules for use in these notebooks, and some results of this work.
 
+## If you want to run this repository yourself...
+Make sure to create a Python environment from `requirements.txt`. If you are using Anaconda, you'll need to run the following commands:
+```
+conda create -n metagov python=3.9
+conda activate metagov
+pip install -r requirements.txt
+```
+
 ## Dive into the Govbase projects, organizations, and structures tables
 Gain some insight into current projects and organizations involved in Web3 governance using data on [Govbase](https://airtable.com/shrgnUrj0dqzZDsOd/tblvk3EFzcoCFvXXi/viwTisATNcua7os4y), Metagov's big public Airtable database. Learn more about Govbase in [this Medium article](https://medium.com/metagov/introducing-govbase-97884b0ddaef).
 
