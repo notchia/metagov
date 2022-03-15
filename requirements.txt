@@ -1,0 +1,11 @@
+airtable
+argh
+jupyter
+kmodes
+matplotlib
+pandas
+requests
+scikit-learn
+scipy
+seaborn
+solidity_parser
