@@ -5,7 +5,7 @@ import pandas as pd
 import ast
 from airtable import airtable
 
-from utils import get_unique_col_values
+from modules.utils import get_unique_col_values
 
 CWD = os.path.join(os.path.dirname(__file__))
 if CWD.rstrip('/').endswith('modules'):

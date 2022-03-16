@@ -2,6 +2,7 @@ import ast
 import pandas as pd
 from sklearn.preprocessing import MultiLabelBinarizer
 
+
 def get_unique_col_values(df, col):
     """Get alphabetized list of unique values in a column of single- or multi-select options.
     Useful """
@@ -28,4 +29,4 @@ def get_unique_col_values(df, col):
         for item in sorted(list(row.index), key=lambda s: (s.lower(), s)):
             print(item)
 
-    return sorted(list(row.index)
+    return sorted(list(row.index))
