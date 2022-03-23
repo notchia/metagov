@@ -3,15 +3,28 @@ import pandas as pd
 from sklearn.preprocessing import MultiLabelBinarizer
 
 
+def ast_eval(s, alt_fcn=None):
+    """Wrapper around ast.parse() to catch exceptions"""
+    try:
+        result = ast.literal_eval(s)
+    except:
+        if alt_fcn:
+            try:
+                result = alt_fcn()
+            except:
+                result = s
+        else:
+            result = s
+
+    return result
+
+
 def get_unique_col_values(df, col):
     """Get alphabetized list of unique values in a column of single- or multi-select options.
     Useful """
 
     # Convert all values in column to lists
-    try:
-        df[col] = df[col].apply(ast.literal_eval)
-    except:
-        df[col] = df[col].apply(lambda s: [x.strip() for x in str(s).split(',')])
+    df[col] = df[col].apply(lambda s: ast_eval(s, alt_fcn=lambda s: [x.strip() for x in str(s).split(',')]))
     df[col] = df[col].apply(lambda d: d if isinstance(d, list) else [])
 
     # One-hot encode column of lists

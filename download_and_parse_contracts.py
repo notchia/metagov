@@ -4,8 +4,8 @@ import ast
 import shutil
 import pandas as pd
 
-from modules.githubscrape import download_repo, construct_file_url
-from modules.contractmodel import parse_contract_file
+from metagov.githubscrape import download_repo, construct_file_url
+from metagov.contractmodel import parse_contract_file
 
 CWD = os.path.join(os.path.dirname(__file__))
 if CWD.rstrip('/').endswith('modules'):
