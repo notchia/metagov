@@ -53,6 +53,8 @@ QUESTIONS = {
     'Q19': "19. OPTIONAL: Do you affiliate with any of the following ecosystems or communities?"
 }
 
+CHOICES = {} # Load from dataset
+
 COLS_QUESTIONS = list(QUESTIONS.keys())
 COLS_RESULTS = ['classification', 'politics', 'economics', 'governance']
 
@@ -79,11 +81,15 @@ def load_data(overwrite=False):
     else:
         df = pd.read_csv(datapath, index_col=0)
         df['Q19'] = df['Q19'].apply(ast_eval)
-        print(df['Q19'])
 
     # Split data into question responses and faction results DataFrames
     df_questions = df[COLS_QUESTIONS]
     df_results = df[COLS_RESULTS]
+
+    # Get unique answer choices for each question
+    for question in COLS_QUESTIONS[:-1]:
+        choices = list(df_questions[question].unique())
+        CHOICES[question] = choices
 
     return {'responses': df_questions, 'results': df_results}
 
