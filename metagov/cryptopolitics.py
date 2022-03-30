@@ -103,7 +103,7 @@ sns.set(font_scale=1.25)
 SAVE = True
 SAVEDIR = os.path.join(os.getcwd(), 'tmp')
 KWARGS_SVG = {'format': 'svg', 'bbox_inches': 'tight'}
-KWARGS_PNG = {'format': 'png', 'bbox_inches': 'tight', 'dpi': 300}
+KWARGS_PNG = {'format': 'png', 'bbox_inches': 'tight', 'dpi': 600}
 
 
 if __name__ == "__main__":
