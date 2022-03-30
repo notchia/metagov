@@ -22,12 +22,15 @@ def get_airtable():
     return airtable.Airtable(BASE_ID, API_KEY)
 
 
-def get_table_as_df(at, tableName):
+def get_table_as_df(at, tableName, kwargs=None):
     """Get all records in a table and load into DataFrame"""
     
+    if kwargs is None:
+        kwargs = {}
+
     # Get all records
     records = []
-    for r in at.iterate(tableName):
+    for r in at.iterate(tableName, **kwargs):
         records.append({'id': r['id'], **(r['fields'])})
         
     # Convert to DataFrame
