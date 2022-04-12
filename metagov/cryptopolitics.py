@@ -10,7 +10,7 @@ def _rename_col(x):
     """Rename question columns to Q{num} to correspond with QUESTIONS keys;
     leave the rest as is"""
     if x[0].isdigit():
-        return 'Q'+x.split('.')[0]
+        return n2q(int(x.split('.')[0]))
     else:
         return x
 
@@ -89,8 +89,8 @@ def load_data(overwrite=False):
     # Get unique answer choices for each question
     for question in COLS_QUESTIONS[:-1]:
         choices = list(df_questions[question].unique())
-        CHOICES[question] = choices
-
+        CHOICES[question] = choices       
+        
     return {'responses': df_questions, 'results': df_results}
 
 
