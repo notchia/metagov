@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import pandas as pd
 import seaborn as sns
 
@@ -11,6 +12,18 @@ def _rename_col(x):
     leave the rest as is"""
     if x[0].isdigit():
         return n2q(int(x.split('.')[0]))
+    else:
+        return x
+
+def _rename_faction(x):
+    """Rename factions"""
+    renamed = {
+        'DAOist': 'Crypto-communitarian', 
+        'True neutral': 'Crypto-centrist', 
+        'Crypto-ancap': 'Crypto-anarchocapitalist'
+    }
+    if x in renamed.keys():
+        return renamed[x]
     else:
         return x
 
@@ -56,15 +69,74 @@ QUESTIONS = {
 CHOICES = {} # Load from dataset
 
 COLS_QUESTIONS = list(QUESTIONS.keys())
-COLS_RESULTS = ['classification', 'politics', 'economics', 'governance']
+COLS_RESULTS = ['classification', 'politics', 'economics', 'governance', 'politics_score', 'politics_score_recomputed', 'politics_recomputed']
+COLS_AXES = ['politics', 'economics', 'governance']
 
 # Define the canonical order for the factions/classes (for display purposes)
 FACTION_ORDERS = {
-    'politics': ['Crypto-leftist', 'DAOist', 'True neutral', 'Crypto-libertarian', 'Crypto-ancap'],
+    #'politics': ['Crypto-leftist', 'DAOist', 'True neutral', 'Crypto-libertarian', 'Crypto-ancap'],
+    'politics': ['Crypto-leftist', 'Crypto-communitarian', 'Crypto-centrist', 'Crypto-libertarian', 'Crypto-anarchocapitalist'],
     'economics': ['Earner', 'Cryptopunk', 'NPC', 'Techtrepreneur', 'Degen'],
     'governance': ['Walchian', 'Zamfirist', 'Noob', 'Gavinist', 'Szabian']
 }
 
+def _compute_politics_score(row):
+    """Load the data from Govbase. Assumes Govbase data is already clean."""
+    POLITICS_GRID = {
+        'Q6': {
+            'Privacy is the most important feature of blockchain and crypto.': 2,
+        },
+        'Q7': {
+            'Government regulation of crypto will almost always do more harm than good.': 1,
+            'Government regulation of crypto is critical to protect the public interest in these technologies.': -1
+        },
+        'Q9': {
+            'Build art and community.': -1,
+            'Help people around the world earn a living.': -1,
+            'Build useful tech that solve real problems for a set of users.': 1,
+            'Provide financial instruments for maximum wealth creation.': 1
+        },
+        'Q11': {
+            'Most crypto teams make a fair and reasonable amount of profit.': 1,
+            'Crypto teams make too much profit.': -1
+        },
+        'Q12': {
+            'The economic system in crypto is generally fair to most of its participants.': 1,
+            'The economic system in crypto unfairly favors powerful interests.': -1
+        },
+        'Q13': {
+            "Most people who want to get ahead in crypto can make it if they're willing to work hard.": 1,
+            "In crypto, hard work and determination are no guarantee of success for most people.": -1
+        },
+        'Q14': {
+            "Keep on doing what we’re doing, legal or not.": 1
+        },
+        'Q15': {
+            'Crypto does not have a gender problem.': 1
+        },
+        'Q18': {
+            'Liberal or left-wing': -1,
+            'Conservative or right-wing': 1
+        }
+    }
+    
+    scores = [POLITICS_GRID.get(q, {}).get(row[q], 0) for q in COLS_QUESTIONS[:-1]]
+    score = sum(scores)
+    return score
+
+def _get_politics_type(score):
+    if score <= -3:
+        return 'Crypto-leftist'
+    if score < 0:
+        return 'Crypto-communitarian'
+    if score == 0:
+        return 'Crypto-centrist'
+    if score < 5:
+        return 'Crypto-libertarian'
+    if score >= 5:
+        return 'Crypto-anarchocapitalist'
+    else:
+        raise
 
 def load_data(overwrite=False):
     """Load the data from Govbase. Assumes Govbase data is already clean."""
@@ -82,6 +154,9 @@ def load_data(overwrite=False):
         df = pd.read_csv(datapath, index_col=0)
         df['Q19'] = df['Q19'].apply(ast_eval)
 
+    df['politics'] = df['politics'].apply(_rename_faction)
+    df['politics_score_recomputed'] = df.apply(_compute_politics_score, axis=1)
+    df['politics_recomputed'] = df['politics_score_recomputed'].apply(_get_politics_type)
     # Split data into question responses and faction results DataFrames
     df_questions = df[COLS_QUESTIONS]
     df_results = df[COLS_RESULTS]
@@ -98,6 +173,9 @@ def load_data(overwrite=False):
 DEFAULT_COLOR = '#66C2A5'
 sns.set(rc={"figure.figsize":(7, 5)})
 sns.set(font_scale=1.25)
+
+FIVE_COLORS = sns.color_palette("Spectral", 5)
+COLORS_MIN = np.array(FIVE_COLORS.as_hex())
 
 # Output settings
 SAVE = True
