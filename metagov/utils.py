@@ -44,6 +44,7 @@ def get_unique_col_values(df, col):
 
     return sorted(list(row.index))
 
+
 def print_groupby(gb):
     """Print pandas groupby object"""
     for key, item in gb:
