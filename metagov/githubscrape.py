@@ -7,7 +7,7 @@ from zipfile import ZipFile
 from io import BytesIO
 
 CWD = os.path.join(os.path.dirname(__file__))
-if CWD.rstrip('/').endswith('modules'):
+if CWD.rstrip('/').endswith('metagov'):
     CWD = CWD.rstrip('/').rsplit('/', 1)[0]
 TMPDIR = os.path.join(CWD, 'tmp')
 DATADIR = os.path.join(CWD, 'data')
