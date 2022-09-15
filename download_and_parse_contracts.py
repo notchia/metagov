@@ -2,14 +2,13 @@ import os
 import re
 import ast
 import shutil
+import argh
 import pandas as pd
 
 from metagov.githubscrape import download_repo, construct_file_url
 from metagov.contractmodel import parse_contract_file
 
 CWD = os.path.join(os.path.dirname(__file__))
-if CWD.rstrip('/').endswith('modules'):
-    CWD = CWD.rstrip('/').rsplit('/', 1)[0]
 TMPDIR = os.path.join(CWD, 'tmp')
 
 # The following default values can be added to or overridden
@@ -143,8 +142,8 @@ def download_and_parse(githubURL, subdir, label='', kwargs={}):
     parse_repo(repoDir, repoDict, projectLabel=label, **kwargs)
     
 
-def main():
-    csv = os.path.join(CWD, 'data/repos.csv')
+def download_and_parse_all():
+    csv = os.path.join(CWD, 'repos.csv')
     df_contracts = import_contracts(csv)
     
     for i, row in df_contracts.iterrows():
@@ -159,7 +158,11 @@ def main():
         except AssertionError as e:
             print(e)
 
+
+def main(url):
+    download_and_parse(url, 'contracts')
+
     
 if __name__ == '__main__':
-    main()
+    argh.dispatch_command(main)
         

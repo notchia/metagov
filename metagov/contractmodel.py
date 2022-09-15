@@ -3,6 +3,7 @@ import re
 import requests
 import pprint
 import validators
+import argh
 import pandas as pd
 from solidity_parser import parser
 
@@ -661,3 +662,7 @@ def parse_contract_file(uri, label='', debug=False):
     df_objects['coding_topic_search'] = df_objects.apply(lambda row: find_topics_in_obj(row, df_parameters), axis=1)  
     
     return df_objects, df_parameters
+
+
+if __name__ == "__main__":
+    argh.dispatch_command(parse_contract_file)
