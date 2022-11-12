@@ -1,4 +1,4 @@
 [submodule "python-solidity-parser"]
-	path = python-solidity-parser
+	path = solidity-parser
 	url = https://github.com/notchia/python-solidity-parser.git
-	branch = bugfix
+	branch = main
