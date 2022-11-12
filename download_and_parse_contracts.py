@@ -4,6 +4,7 @@ import ast
 import shutil
 import argh
 import pandas as pd
+import logging
 
 from metagov.githubscrape import download_repo, construct_file_url
 from metagov.contractmodel import parse_contract_file
@@ -57,10 +58,10 @@ def parse_repo(projectDir, repoDict, projectLabel='', useDefaults=True, clean=Fa
     df_objects = pd.DataFrame()
     df_parameters = pd.DataFrame()
 
-    print(f"Walking through {projectDir}...")
+    logging.info(f"Walking through {projectDir}...")
     for root, dirnames, filenames in os.walk(projectDir, topdown=True):
         subdir = root.split(projectDir)[-1]
-        print(f"> {subdir}")
+        logging.info(f"Parsing {subdir}...")
         
         # Filter dirnames
         if len(includeDirs) > 0:
@@ -85,11 +86,11 @@ def parse_repo(projectDir, repoDict, projectLabel='', useDefaults=True, clean=Fa
                 fileURL = construct_file_url(f"{subdir.strip('/')}/{fname}", repoDict)
                 df_o['url'] = fileURL
                 df_p['url'] = fileURL
-                df_objects = df_objects.append(df_o)
-                df_parameters = df_parameters.append(df_p)
+                df_objects = pd.concat([df_objects, df_o])
+                df_parameters = pd.concat([df_parameters, df_p])
                 fileCount += 1
             except Exception as e:
-                print(f"! Error parsing {fname}: {e}")
+                logging.exception(f"Error parsing {fname}:\n{str(e)}")
                 errorFiles.append(os.path.join(subdir, fname))
         
     # Save parsed data to files
@@ -98,15 +99,14 @@ def parse_repo(projectDir, repoDict, projectLabel='', useDefaults=True, clean=Fa
         df_objects['repo_update_datetime'] = repoDict['updated_at']
         df_objects['repo_version'] = repoDict['ref']
         df_objects['repo_url'] = repoDict['url']
-        # TODO: reset index
-        df_objects.drop(columns=['line_numbers']).to_csv(objectsFile)
-        df_parameters.drop(columns=['line_number']).to_csv(parametersFile)
+        df_objects.drop(columns=['line_numbers']).reset_index().to_csv(objectsFile)
+        df_parameters.drop(columns=['line_number']).reset_index().to_csv(parametersFile)
     
-    print(f"\nSummary for {projectLabel}: parsed {fileCount} files")
+    logging.info(f"Summary for {projectLabel}: parsed {fileCount} files")
     if len(errorFiles) > 0:
-        print("Could not parse the following files:")
+        logging.warning("Could not parse the following files:")
         for f in errorFiles:
-            print(f"\t{f}")
+            logging.warning(f"\t{f}")
             
     if clean:
         shutil.rmtree(projectDir)
