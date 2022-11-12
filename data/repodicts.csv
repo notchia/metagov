@@ -21,3 +21,6 @@ kleros,erc-792,master,v8.0.0,2021-10-07T22:13:38Z,https://github.com/kleros/erc-
 jurteam,mvp-smart-contract,master,,2021-12-30T02:31:13Z,https://github.com/jurteam/mvp-smart-contract,jurteam_mvp-smart-contract_master
 
 MolochVentures,moloch,master,,2022-02-01T13:17:27Z,https://github.com/MolochVentures/moloch,MolochVentures_moloch_master
+safe-global,safe-contracts,main,v1.3.0-libs.0,2021-11-17T16:53:12Z,https://github.com/safe-global/safe-contracts/tree/v1.3.0-libs.0,safe-global_safe-contracts_v1.3.0-libs.0
+gnosis,zodiac,master,v1.1.5,2022-09-14T04:32:09Z,https://github.com/gnosis/zodiac/tree/v1.1.5,gnosis_zodiac_v1.1.5
+aragon,core,develop,,2022-09-06T19:24:46Z,https://github.com/aragon/core/tree/develop/packages/contracts/,aragon_core_develop

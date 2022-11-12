@@ -8,5 +8,4 @@ requests
 scikit-learn
 scipy
 seaborn
-solidity_parser
 validators
