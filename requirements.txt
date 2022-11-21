@@ -3,6 +3,7 @@ argh
 jupyter
 kmodes
 matplotlib
+networkx
 pandas
 requests
 scikit-learn
